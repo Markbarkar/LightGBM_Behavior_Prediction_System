@@ -1,0 +1,6 @@
+# 基于LightGBM的用户行为预测模型所需依赖
+pandas>=1.0.0
+numpy>=1.18.0
+scikit-learn>=0.22.0
+lightgbm>=3.0.0
+matplotlib>=3.1.0
