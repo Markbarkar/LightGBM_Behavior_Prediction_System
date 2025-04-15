@@ -172,9 +172,19 @@ def train_lightgbm_model_multiclass(X_train, y_train, X_val, y_val, feature_name
     num_class = len(np.unique(y_train))
     print(f"类别数量: {num_class}")
     
+    # 计算更激进的类别权重
+    class_counts = np.bincount(y_train)
+    total_samples = len(y_train)
+    # 使用平方根来增加少数类别的权重
+    class_weights = np.sqrt(total_samples / (num_class * class_counts))
+    # 进一步增加少数类别的权重
+    class_weights = class_weights * (1 + np.log(total_samples / class_counts))
+    print("类别权重:", dict(zip(range(num_class), class_weights)))
+    
     # 创建数据集
     train_data = lgb.Dataset(X_train, label=y_train, feature_name=feature_names, 
-                            categorical_feature=categorical_features)
+                            categorical_feature=categorical_features,
+                            weight=class_weights[y_train])  # 添加类别权重
     val_data = lgb.Dataset(X_val, label=y_val, feature_name=feature_names, 
                           categorical_feature=categorical_features, reference=train_data)
     
@@ -182,33 +192,61 @@ def train_lightgbm_model_multiclass(X_train, y_train, X_val, y_val, feature_name
     params = {
         'objective': 'multiclass',  # 多分类目标
         'num_class': num_class,     # 类别数量
-        'metric': 'multi_logloss',  # 多分类损失函数
+        'metric': ['multi_logloss', 'multi_error'],  # 多分类损失函数和错误率
         'boosting_type': 'gbdt',
-        'learning_rate': 0.05,
-        'num_leaves': 31,
-        'max_depth': -1,
-        'min_data_in_leaf': 20,
-        'feature_fraction': 0.8,
-        'bagging_fraction': 0.8,
+        'learning_rate': 0.01,      # 降低学习率
+        'num_leaves': 63,           # 增加叶子节点数
+        'max_depth': 8,             # 限制最大深度
+        'min_data_in_leaf': 10,     # 减少叶子节点最小样本数
+        'feature_fraction': 0.7,    # 减少特征采样比例
+        'bagging_fraction': 0.7,    # 减少样本采样比例
         'bagging_freq': 5,
-        'verbose': -1
+        'lambda_l1': 0.1,           # 添加L1正则化
+        'lambda_l2': 0.1,           # 添加L2正则化
+        'min_gain_to_split': 0.0,   # 降低分裂增益阈值
+        'verbose': -1,
+        'is_unbalance': True,       # 处理类别不平衡
+        'scale_pos_weight': 1,      # 正样本权重
+        'class_weight': 'balanced', # 使用平衡的类别权重
+        'min_child_weight': 1,      # 降低子节点权重阈值
+        'min_split_gain': 0.0       # 降低分裂增益阈值
     }
+    
+    # 自定义评估函数
+    def custom_eval(preds, train_data):
+        labels = train_data.get_label()
+        preds = preds.reshape(num_class, -1).T
+        pred_labels = np.argmax(preds, axis=1)
+        
+        # 计算每个类别的准确率
+        class_acc = {}
+        for i in range(num_class):
+            mask = labels == i
+            if np.sum(mask) > 0:
+                class_acc[i] = np.mean(pred_labels[mask] == labels[mask])
+            else:
+                class_acc[i] = 0.0
+        
+        # 计算宏平均准确率
+        macro_acc = np.mean(list(class_acc.values()))
+        
+        return 'macro_acc', macro_acc, True
     
     # 训练模型
     model = lgb.train(
         params,
         train_data,
-        num_boost_round=1000,
+        num_boost_round=2000,        # 增加迭代次数
         valid_sets=[train_data, val_data],
+        valid_names=['train', 'valid'],
         callbacks=[
-            early_stopping(stopping_rounds=50),
-            log_evaluation(period=100)
-        ]
+            early_stopping(stopping_rounds=100),  # 增加早停轮数
+            log_evaluation(period=50)
+        ],
+        feval=custom_eval  # 添加自定义评估函数
     )
     
     print(f"模型训练完成，耗时: {time.time() - start_time:.2f}秒")
-    print(f"最佳迭代次数: {model.best_iteration}")
-    
     return model
 
 

@@ -263,37 +263,21 @@ def predict_user_behavior_multiclass(model, X):
         - y_pred: 预测的行为类型（1-5之间的整数）
         - y_pred_proba: 各行为类型的预测概率
     """
-    # 检查模型是否支持多分类预测
-    num_class = model.num_class() if hasattr(model, 'num_class') else 1
+    # 多分类预测
+    y_pred_proba = model.predict(X)
     
-    # 预测概率
-    if num_class > 1:
-        # 多分类模型，返回每个类别的概率
-        y_pred_proba = model.predict(X)
-        if len(y_pred_proba.shape) == 1:  # 如果只有一个样本，reshape一下
-            y_pred_proba = y_pred_proba.reshape(1, -1)
-        
-        # 获取概率最大的类别作为预测结果
-        y_pred = np.argmax(y_pred_proba[0]) + 1  # +1是因为类别从1开始
-        
-        return y_pred, y_pred_proba[0]
-    else:
-        # 二分类模型，只能预测是否购买
-        y_pred_proba_binary = model.predict(X)[0]  # 获取第一个样本的预测概率
-        
-        # 转换为二分类结果
-        y_pred_binary = 2 if y_pred_proba_binary > 0.5 else 1  # 2表示购买，1表示浏览
-        
-        # 创建一个5类的概率分布（大部分概率集中在预测的类别上）
-        y_pred_proba = np.zeros(5)
-        if y_pred_binary == 2:  # 预测为购买
-            y_pred_proba[1] = y_pred_proba_binary  # 购买的概率
-            y_pred_proba[0] = 1 - y_pred_proba_binary  # 浏览的概率
-        else:  # 预测为浏览
-            y_pred_proba[0] = 1 - y_pred_proba_binary  # 浏览的概率
-            y_pred_proba[1] = y_pred_proba_binary  # 购买的概率
-        
-        return y_pred_binary, y_pred_proba
+    # 打印预测概率和形状，用于调试
+    print("预测概率:", y_pred_proba)
+    print("预测概率形状:", y_pred_proba.shape)
+    
+    # 确保预测概率是二维数组
+    if len(y_pred_proba.shape) == 1:
+        y_pred_proba = y_pred_proba.reshape(1, -1)
+    
+    # 获取概率最大的类别作为预测结果
+    y_pred = np.argmax(y_pred_proba[0]) + 1  # +1是因为类别从1开始
+    
+    return y_pred, y_pred_proba[0]
 
 
 def print_prediction_result_multiclass(user_input, y_pred, y_pred_proba):
