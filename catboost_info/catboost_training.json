@@ -315,5 +315,6 @@
 {"learn":[0.1873382037],"iteration":311,"passed_time":26140.03853,"remaining_time":57642.13625,"test":[0.1565144546]},
 {"learn":[0.1870546144],"iteration":312,"passed_time":26226.21458,"remaining_time":57563.60837,"test":[0.1561891571]},
 {"learn":[0.1867405216],"iteration":313,"passed_time":26306.47802,"remaining_time":57472.1144,"test":[0.1558575915]},
-{"learn":[0.1864478419],"iteration":314,"passed_time":26391.82804,"remaining_time":57391.75304,"test":[0.1555340176]}
+{"learn":[0.1864478419],"iteration":314,"passed_time":26391.82804,"remaining_time":57391.75304,"test":[0.1555340176]},
+{"learn":[0.1861343008],"iteration":315,"passed_time":26482.45312,"remaining_time":57322.77827,"test":[0.1552050924]}
 ]}
