@@ -1,77 +1,130 @@
-# 基于LightGBM的用户行为预测模型
+# Advanced Behavior Prediction System
 
-## 项目简介
+## Overview
+This project implements an advanced behavior prediction system using multiple machine learning models (XGBoost, CatBoost, LightGBM) with ensemble learning. The system is designed to predict user behavior types based on historical data, with robust feature engineering and comprehensive model evaluation.
 
-本项目使用LightGBM算法对京东用户行为数据进行分析和预测，旨在预测用户的购买行为。通过对用户历史行为数据的学习，模型能够预测用户是否会对特定商品进行购买操作。
+## Features
+- **Multi-Model Integration**: Combines XGBoost, CatBoost, and LightGBM with voting ensemble
+- **Advanced Feature Engineering**: 
+  - Time-based features (hour, day, month, day of week)
+  - User behavior statistics
+  - Item behavior statistics
+  - Shop behavior statistics
+  - Interaction features
+  - Time window features
+- **GPU Acceleration**: Supports multi-GPU training (up to 2 GPUs)
+- **Checkpoint & Resume**: Automatic model checkpointing and training resumption
+- **Comprehensive Visualization**:
+  - Class distribution plots
+  - Feature importance analysis
+  - Confusion matrices
+  - Learning curves
+- **Robust Error Handling**: Graceful handling of missing data and feature calculation errors
 
-## 数据集说明
+## Requirements
+- Python 3.10+
+- CUDA-compatible GPU (recommended)
+- Required Python packages:
+  ```
+  pandas
+  numpy
+  xgboost
+  catboost
+  lightgbm
+  scikit-learn
+  matplotlib
+  seaborn
+  joblib
+  ```
 
-数据集位于`data/jd_data.csv`，包含京东用户的行为数据，主要字段包括：
-
-- `user_log_acct`: 用户ID
-- `item_sku_id`: 商品ID
-- `action_time`: 行为时间
-- `action_type`: 行为类型（如浏览、购买等）
-- `brand_code`: 品牌编码
-- `shop_id`: 店铺ID
-- `item_third_cate_cd`: 商品三级类目编码
-- `vender_id`: 供应商ID
-- `shop_score`: 店铺评分
-- `age`: 用户年龄
-- `sex`: 用户性别
-- `user_level`: 用户等级
-- `province`: 省份
-- `city`: 城市
-- `county`: 区县
-
-## 功能特点
-
-- 数据预处理：处理缺失值、特征编码、时间特征提取
-- 特征工程：构建用户行为聚合特征、商品特征
-- 模型训练：使用LightGBM算法训练二分类模型
-- 模型评估：计算准确率、精确率、召回率、F1分数和AUC等指标
-- 特征重要性分析：可视化展示最重要的特征
-
-## 使用方法
-
-### 环境准备
-
-```bash
-pip install -r requirements.txt
+## Project Structure
+```
+.
+├── data/
+│   └── processed/
+│       ├── train.csv
+│       └── val.csv
+├── models/
+│   └── checkpoints/
+│       ├── xgb_checkpoint.json
+│       ├── cb_checkpoint.cbm
+│       └── lgb_checkpoint.txt
+├── plots/
+│   ├── class_distribution.png
+│   ├── feature_importance.png
+│   ├── confusion_matrix.png
+│   └── learning_curves.png
+├── advanced_behavior_prediction.py
+└── README.md
 ```
 
-### 模型训练
+## Usage
+1. **Data Preparation**:
+   - Place your training data in `data/processed/train.csv`
+   - Place your validation data in `data/processed/val.csv`
 
-```bash
-python train_model.py
-```
+2. **Training**:
+   ```bash
+   python advanced_behavior_prediction.py
+   ```
+   The script will:
+   - Load and preprocess the data
+   - Perform feature engineering
+   - Train multiple models with GPU acceleration
+   - Save checkpoints every 10 iterations
+   - Generate evaluation plots
+   - Save final models
 
-默认情况下，脚本会从数据集中采样100万条记录进行训练。如需使用全量数据，请修改`train_model.py`中的`sample_size`参数。
+3. **Model Checkpoints**:
+   - Checkpoints are saved in `models/checkpoints/`
+   - Training can be resumed from the last checkpoint if interrupted
 
-### 模型预测
+## Model Details
+- **XGBoost**:
+  - GPU-accelerated training
+  - Multi-class classification
+  - Early stopping with checkpointing
 
-```bash
-python predict.py --input <input_file> --output <output_file>
-```
+- **CatBoost**:
+  - GPU support
+  - Categorical feature handling
+  - Automatic snapshot saving
 
-## 依赖项
+- **LightGBM**:
+  - GPU acceleration
+  - Feature importance tracking
+  - Model checkpointing
 
-- Python 3.6+
-- pandas
-- numpy
-- scikit-learn
-- lightgbm
-- matplotlib
+- **Voting Classifier**:
+  - Soft voting ensemble
+  - Parallel prediction with all CPU cores
 
-## 模型性能
+## Performance Features
+- **GPU Acceleration**:
+  - Supports up to 2 GPUs
+  - Automatic GPU detection and utilization
+  - Optimized for CUDA-enabled environments
 
-在测试集上，模型的主要性能指标如下：
-- 准确率(Accuracy): 根据实际训练结果而定
-- AUC: 根据实际训练结果而定
-- F1分数: 根据实际训练结果而定
+- **Memory Efficiency**:
+  - Efficient data loading
+  - Optimized feature calculation
+  - Memory-friendly batch processing
 
-## 注意事项
+- **Training Optimization**:
+  - Early stopping
+  - Automatic checkpointing
+  - Progress monitoring
 
-- 数据集较大（约37GB），请确保有足够的内存和存储空间
-- 默认使用采样数据进行训练，全量训练可能需要较长时间
-- 模型训练完成后会保存为`lightgbm_user_behavior_model.txt`
+## Output
+- **Models**: Saved in `models/` directory
+- **Plots**: Generated in `plots/` directory
+  - Class distribution
+  - Feature importance
+  - Confusion matrices
+  - Learning curves
+
+## Notes
+- The system automatically handles missing data and feature calculation errors
+- All visualizations are in English to avoid display issues
+- Training progress is displayed in real-time
+- Models are saved after each training session
