@@ -173,13 +173,13 @@ def advanced_feature_engineering(df):
     print(f"特征工程完成，耗时: {time.time() - start_time:.2f}秒")
     return df
 
-def plot_class_distribution(y, title="类别分布"):
+def plot_class_distribution(y, title="Class Distribution"):
     """绘制类别分布图"""
     plt.figure(figsize=(10, 6))
     sns.countplot(x=y)
     plt.title(title)
-    plt.xlabel("行为类型")
-    plt.ylabel("样本数量")
+    plt.xlabel("Action Type")
+    plt.ylabel("Count")
     plt.xticks(range(len(ACTION_TYPE_MAPPING)), [ACTION_TYPE_MAPPING[i] for i in range(len(ACTION_TYPE_MAPPING))])
     plt.savefig(f'plots/{title}.png')
     plt.close()
@@ -202,12 +202,12 @@ def plot_feature_importance(models, feature_names, model_names):
         }).sort_values('Importance', ascending=False).head(20)
         
         sns.barplot(x='Importance', y='Feature', data=importance_df)
-        plt.title(f'{name} - 特征重要性')
+        plt.title(f'{name} - Feature Importance')
     plt.tight_layout()
     plt.savefig('plots/feature_importance.png')
     plt.close()
 
-def plot_confusion_matrix(y_true, y_pred, title="混淆矩阵"):
+def plot_confusion_matrix(y_true, y_pred, title="Confusion Matrix"):
     """绘制混淆矩阵"""
     cm = confusion_matrix(y_true, y_pred)
     plt.figure(figsize=(10, 8))
@@ -215,8 +215,8 @@ def plot_confusion_matrix(y_true, y_pred, title="混淆矩阵"):
                 xticklabels=[ACTION_TYPE_MAPPING[i] for i in range(len(ACTION_TYPE_MAPPING))],
                 yticklabels=[ACTION_TYPE_MAPPING[i] for i in range(len(ACTION_TYPE_MAPPING))])
     plt.title(title)
-    plt.xlabel('预测标签')
-    plt.ylabel('真实标签')
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
     plt.savefig(f'plots/{title}.png')
     plt.close()
 
@@ -229,11 +229,11 @@ def plot_learning_curves(models, X_train, y_train, X_val, y_val, model_names):
             val_metric = list(model.evals_result()['validation_1'].values())[0]
             
             plt.subplot(2, 2, i+1)
-            plt.plot(train_metric, label='训练集')
-            plt.plot(val_metric, label='验证集')
-            plt.title(f'{name} - 学习曲线')
-            plt.xlabel('迭代次数')
-            plt.ylabel('损失值')
+            plt.plot(train_metric, label='Training')
+            plt.plot(val_metric, label='Validation')
+            plt.title(f'{name} - Learning Curve')
+            plt.xlabel('Iterations')
+            plt.ylabel('Loss')
             plt.legend()
     plt.tight_layout()
     plt.savefig('plots/learning_curves.png')
@@ -243,6 +243,10 @@ def train_models(X_train, y_train, X_val, y_val, feature_names, categorical_feat
     """训练多个模型"""
     print("开始训练多个模型...")
     start_time = time.time()
+    
+    # 检查GPU是否可用
+    use_gpu = True  # 默认使用GPU
+    num_gpus = 2  # 使用2个GPU
     
     # XGBoost参数
     xgb_params = {
@@ -256,7 +260,11 @@ def train_models(X_train, y_train, X_val, y_val, feature_names, categorical_feat
         'colsample_bytree': 0.8,
         'reg_alpha': 0.1,
         'reg_lambda': 0.1,
-        'random_state': 42
+        'random_state': 42,
+        'tree_method': 'gpu_hist' if use_gpu else 'hist',
+        'gpu_id': 0 if use_gpu else None,
+        'predictor': 'gpu_predictor' if use_gpu else 'cpu_predictor',
+        'n_gpus': num_gpus if use_gpu else 1
     }
     
     # CatBoost参数
@@ -268,7 +276,10 @@ def train_models(X_train, y_train, X_val, y_val, feature_names, categorical_feat
         'random_seed': 42,
         'loss_function': 'MultiClass',
         'eval_metric': 'MultiClass',
-        'cat_features': categorical_features
+        'cat_features': categorical_features,
+        'task_type': 'GPU' if use_gpu else 'CPU',
+        'devices': '0,1' if use_gpu else None,  # 使用两个GPU
+        'thread_count': -1  # 使用所有可用的CPU线程
     }
     
     # LightGBM参数
@@ -284,42 +295,99 @@ def train_models(X_train, y_train, X_val, y_val, feature_names, categorical_feat
         'bagging_fraction': 0.7,
         'lambda_l1': 0.1,
         'lambda_l2': 0.1,
-        'verbose': -1
+        'verbose': 1,
+        'device': 'gpu' if use_gpu else 'cpu',
+        'gpu_platform_id': 0 if use_gpu else None,
+        'gpu_device_id': 0 if use_gpu else None,
+        'num_gpu': num_gpus if use_gpu else 1,
+        'num_threads': -1  # 使用所有可用的CPU线程
     }
     
+    models = []
+    model_names = ['XGBoost', 'CatBoost', 'LightGBM']
+    
+    # 创建模型保存目录
+    os.makedirs('models/checkpoints', exist_ok=True)
+    
     # 训练XGBoost
+    print("\n训练XGBoost模型...")
+    xgb_checkpoint = 'models/checkpoints/xgb_checkpoint.json'
     xgb_model = xgb.XGBClassifier(**xgb_params)
+    
+    # 检查是否存在断点
+    if os.path.exists(xgb_checkpoint):
+        print("发现XGBoost断点，继续训练...")
+        xgb_model.load_model(xgb_checkpoint)
+    
+    # 自定义回调函数来保存模型
+    def save_xgb_model(env):
+        if env.iteration % 10 == 0:  # 每10轮保存一次
+            xgb_model.save_model(xgb_checkpoint)
+    
     xgb_model.fit(X_train, y_train,
                  eval_set=[(X_train, y_train), (X_val, y_val)],
-                 verbose=False)
+                 verbose=True,
+                 callbacks=[xgb.callback.EarlyStopping(rounds=50),
+                          save_xgb_model])
+    models.append(xgb_model)
     
     # 训练CatBoost
+    print("\n训练CatBoost模型...")
+    cb_checkpoint = 'models/checkpoints/cb_checkpoint.cbm'
     cb_model = cb.CatBoostClassifier(**cb_params)
+    
+    # 检查是否存在断点
+    if os.path.exists(cb_checkpoint):
+        print("发现CatBoost断点，继续训练...")
+        cb_model.load_model(cb_checkpoint)
+    
     cb_model.fit(X_train, y_train,
                 eval_set=(X_val, y_val),
                 early_stopping_rounds=50,
-                verbose=False)
+                verbose=True,
+                save_snapshot=True,
+                snapshot_file=cb_checkpoint)
+    models.append(cb_model)
     
     # 训练LightGBM
+    print("\n训练LightGBM模型...")
+    lgb_checkpoint = 'models/checkpoints/lgb_checkpoint.txt'
     lgb_model = lgb.LGBMClassifier(**lgb_params)
+    
+    # 检查是否存在断点
+    if os.path.exists(lgb_checkpoint):
+        print("发现LightGBM断点，继续训练...")
+        lgb_model.booster_ = lgb.Booster(model_file=lgb_checkpoint)
+    
     lgb_model.fit(X_train, y_train,
                  eval_set=[(X_train, y_train), (X_val, y_val)],
                  early_stopping_rounds=50,
-                 verbose=False)
+                 verbose=True,
+                 callbacks=[lgb.callback.early_stopping(50),
+                          lgb.callback.model_checkpoint(lgb_checkpoint, period=10)])
+    models.append(lgb_model)
     
     # 创建投票分类器
+    print("\n创建投票分类器...")
     voting_model = VotingClassifier(
         estimators=[
             ('xgb', xgb_model),
             ('cb', cb_model),
             ('lgb', lgb_model)
         ],
-        voting='soft'
+        voting='soft',
+        n_jobs=-1  # 使用所有可用的CPU核心
     )
     voting_model.fit(X_train, y_train)
+    models.append(voting_model)
     
-    print(f"模型训练完成，耗时: {time.time() - start_time:.2f}秒")
-    return [xgb_model, cb_model, lgb_model, voting_model]
+    # 保存最终模型
+    print("\n保存最终模型...")
+    for model, name in zip(models, model_names + ['Voting']):
+        joblib.dump(model, f'models/{name.lower()}_model.joblib')
+    
+    print(f"模型训练完成，总耗时: {time.time() - start_time:.2f}秒")
+    return models
 
 def evaluate_models(models, X, y, model_names):
     """评估多个模型"""
